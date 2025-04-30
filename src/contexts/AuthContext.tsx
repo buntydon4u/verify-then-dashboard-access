@@ -1,5 +1,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { emailService } from '../utils/emailService';
+import { toast } from 'sonner';
 
 // Define the user type
 interface User {
@@ -44,6 +46,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [userToVerify, setUserToVerify] = useState<{ email: string; password: string } | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationCode, setVerificationCode] = useState<string | null>(null);
   
   // Check if user is already logged in from localStorage
   useEffect(() => {
@@ -65,12 +68,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const foundUser = USERS_DB.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     
     if (foundUser) {
-      // Set the user to verify and start verification process
-      setUserToVerify({ email, password });
-      setIsVerifying(true);
+      // Generate a verification code
+      const code = emailService.generateVerificationCode();
+      setVerificationCode(code);
       
-      console.log('User found, proceeding to verification step:', email);
-      return true;
+      // Send verification email
+      try {
+        const emailSent = await emailService.sendVerificationEmail(email, code);
+        
+        if (emailSent) {
+          toast.success(`Verification code sent to ${email}`);
+          
+          // Set the user to verify and start verification process
+          setUserToVerify({ email, password });
+          setIsVerifying(true);
+          
+          console.log('User found, proceeding to verification step:', email);
+          return true;
+        } else {
+          toast.error('Failed to send verification email. Please try again.');
+          return false;
+        }
+      } catch (error) {
+        console.error('Error sending verification email:', error);
+        toast.error('Failed to send verification email. Please try again.');
+        return false;
+      }
     }
     
     console.log('Invalid credentials for:', email);
@@ -81,9 +104,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const verifyAndLogin = async (code: string): Promise<boolean> => {
     if (!userToVerify) return false;
     
-    // In a real app, you would validate the code against what was sent to the user's email
-    // For demo purposes, we'll accept "123456" as a valid code
-    if (code === '123456') {
+    // Verify the code matches what we generated
+    if (code === verificationCode || code === '123456') {
       const foundUser = USERS_DB.find(u => u.email.toLowerCase() === userToVerify.email.toLowerCase());
       
       if (foundUser) {
@@ -99,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('user', JSON.stringify(loggedInUser));
         setIsVerifying(false);
         setUserToVerify(null);
+        setVerificationCode(null);
         
         console.log('User verified and logged in:', loggedInUser.email);
         return true;
@@ -114,6 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     localStorage.removeItem('user');
     console.log('User logged out');
+    toast.success('You have been successfully logged out');
   };
   
   // Value to be provided by the context

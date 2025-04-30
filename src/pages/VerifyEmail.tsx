@@ -5,14 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { ArrowLeft, CheckCircle2, Mail } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Mail, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 const VerifyEmail: React.FC = () => {
   const [verificationCode, setVerificationCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(60);
   const { userToVerify, verifyAndLogin } = useAuth();
-  const { toast } = useToast();
+  const { toast: toastUI } = useToast();
   const navigate = useNavigate();
 
   // Countdown timer for resend code
@@ -37,7 +38,7 @@ const VerifyEmail: React.FC = () => {
     e.preventDefault();
     
     if (!verificationCode) {
-      toast({
+      toastUI({
         title: "Error",
         description: "Please enter the verification code",
         variant: "destructive",
@@ -51,13 +52,10 @@ const VerifyEmail: React.FC = () => {
       const success = await verifyAndLogin(verificationCode);
       
       if (success) {
-        toast({
-          title: "Success",
-          description: "Email verified successfully",
-        });
+        toast.success("Email verified successfully");
         navigate('/dashboard');
       } else {
-        toast({
+        toastUI({
           title: "Verification failed",
           description: "Invalid verification code",
           variant: "destructive",
@@ -65,7 +63,7 @@ const VerifyEmail: React.FC = () => {
       }
     } catch (error) {
       console.error('Verification error:', error);
-      toast({
+      toastUI({
         title: "Error",
         description: "An unexpected error occurred",
         variant: "destructive",
@@ -75,13 +73,23 @@ const VerifyEmail: React.FC = () => {
     }
   };
 
-  const handleResendCode = () => {
-    // In a real app, this would trigger an API call to resend the code
-    toast({
-      title: "Code resent",
-      description: "A new verification code has been sent to your email",
-    });
+  const handleResendCode = async () => {
+    if (!userToVerify) return;
+    
     setTimeLeft(60);
+    toast.promise(
+      import('../utils/emailService').then(module => {
+        return module.emailService.sendVerificationEmail(
+          userToVerify.email,
+          "123456"
+        );
+      }),
+      {
+        loading: 'Sending new verification code...',
+        success: 'A new verification code has been sent to your email',
+        error: 'Failed to send verification code',
+      }
+    );
   };
 
   if (!userToVerify) {
@@ -130,9 +138,20 @@ const VerifyEmail: React.FC = () => {
               className="text-center text-lg tracking-widest"
               maxLength={6}
             />
-            <p className="text-xs text-muted-foreground text-center">
-              For this demo, enter <span className="font-semibold">123456</span>
-            </p>
+          </div>
+          
+          <div className="bg-muted/50 p-3 rounded-md border border-muted mb-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  For this demo, enter <span className="font-semibold">123456</span> as your verification code.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 italic">
+                  Check the browser console to see the verification email details.
+                </p>
+              </div>
+            </div>
           </div>
           
           <Button
